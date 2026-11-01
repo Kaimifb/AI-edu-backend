@@ -68,3 +68,24 @@ class RecommendationFlowTests(TestCase):
         self.assertEqual(recommendation['weak_topics'], [])
         self.assertEqual(recommendation['gap'], 17)
         self.assertEqual(recommendation['level'], 'advanced')
+
+    def test_admin_analytics_shows_latest_decision_per_student_and_weak_topics(self):
+        self.prepare()
+        self.submit(2)
+        self.client.force_login(self.other)
+        self.prepare()
+        self.submit(2)
+        self.prepare()
+        self.submit()
+        response = self.admin_client.get('/api/v1/admin/analytics/?period=all')
+        self.assertEqual(response.status_code, 200)
+        row = next(row for row in response.data['modules'] if row['id'] == self.first.pk)
+        self.assertEqual(row['threshold'], 60)
+        stats = row['recommendations']
+        self.assertEqual((stats['attempts'], stats['tested_students']), (3, 2))
+        self.assertEqual((stats['next_students'], stats['repeat_students'], stats['next_rate']), (1, 1, 50))
+        self.assertEqual(stats['readiness_values'], [43.5, 79.4])
+        self.assertEqual(stats['average_readiness'], 61.45)
+        self.assertEqual(stats['weak_topics'], [{'competency': 'application', 'title': 'application', 'students': 1}])
+        empty = next(row for row in response.data['modules'] if row['id'] == self.second.pk)['recommendations']
+        self.assertEqual((empty['tested_students'], empty['average_readiness'], empty['weak_topics']), (0, None, []))
