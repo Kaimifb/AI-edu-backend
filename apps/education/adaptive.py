@@ -129,7 +129,7 @@ def evaluate_module_attempt(user, item, question_results, practice):
         UserLearningItemProgress.objects.filter(user=user, learning_item__in=content).update(
             progress_percent=0, is_completed=False, completed_at=None)
         PracticeSubmission.objects.filter(user=user, item__in=content).update(is_current=False)
-    return {
+    result = {
         'readiness': round(readiness * 100, 2), 'threshold': module.adaptive_threshold,
         'module_passed': passed, 'module_completed': progress.is_completed,
         'theory': theory, 'practice': practice, 'errors': errors, 'competency': competency,
@@ -137,3 +137,6 @@ def evaluate_module_attempt(user, item, question_results, practice):
         'repeat_item_short_id': first.short_id if first else item.short_id,
         'next_item_short_id': next_item.short_id if next_item else None,
     }
+    from .recommendations import build_recommendation
+    result['recommendation'] = build_recommendation(result, question_results)
+    return result
