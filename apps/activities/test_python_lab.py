@@ -120,7 +120,8 @@ class PythonLabTests(TestCase):
     def test_learner_can_download_dataset_of_published_practice(self):
         from tempfile import TemporaryDirectory
         from django.core.files.base import ContentFile
-        folder = TemporaryDirectory()
+        # On Windows a file that is still open cannot be deleted, so cleanup must not fail the test.
+        folder = TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(folder.cleanup)
         override = override_settings(MEDIA_ROOT=folder.name)
         override.enable()
@@ -129,4 +130,8 @@ class PythonLabTests(TestCase):
         media.file.save('cars.csv', ContentFile(b'Year,Price\n1,2'), save=True)
         url = f'/api/v1/media/{media.pk}/download/'
         self.publish({**self.config, 'datasets': [{'media': media.pk, 'name': 'cars.csv', 'size': media.size, 'url': url}]})
-        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        b''.join(response.streaming_content)
+        response.close()
+        media.file.close()
