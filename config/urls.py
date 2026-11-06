@@ -49,6 +49,7 @@ urlpatterns = [
     path('api/v1/certificates/<uuid:token>/qr/', certificates.CertificateQRView.as_view()),
     path('api/v1/modules/', education.ModuleList.as_view()),
     path('api/v1/modules/<str:short_id>/', education.ModuleDetail.as_view()),
+    path('api/v1/modules/<str:short_id>/threshold/', education.ModuleThreshold.as_view()),
     path('api/v1/items/', education.LearningItemList.as_view()),
     path('api/v1/items/<str:short_id>/', education.LearningItemDetail.as_view()),
     path('api/v1/items/<str:short_id>/progress/', education.ItemProgressView.as_view()),

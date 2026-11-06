@@ -329,3 +329,24 @@ class LearningItemDetail(AdminWriteMixin, generics.RetrieveUpdateDestroyAPIView)
     @transaction.atomic
     def perform_destroy(self, instance):
         delete_item(instance)
+
+
+class ModuleThresholdSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Module
+        fields = ['short_id', 'adaptive_threshold']
+        read_only_fields = ['short_id']
+        extra_kwargs = {'adaptive_threshold': {'required': True}}
+
+
+class ModuleThreshold(generics.UpdateAPIView):
+    """Administrators tune the adaptive pass threshold from analytics without editing the module itself."""
+    serializer_class = ModuleThresholdSerializer
+    permission_classes = [IsPlatformAdmin]
+    lookup_field = 'short_id'
+    http_method_names = ['patch', 'options']
+    queryset = Module.objects.filter(deleted_at__isnull=True)
+
+    def patch(self, request, *args, **kwargs):
+        # The only writable field is required, so treat PATCH as a full update.
+        return self.update(request, *args, **kwargs)
