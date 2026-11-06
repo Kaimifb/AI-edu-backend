@@ -33,6 +33,7 @@ urlpatterns = [
     path('api/v1/tutor/avatar/config/', TutorAvatarConfigView.as_view()),
     path('api/v1/tutor/avatar/model/', TutorAvatarModelView.as_view()),
     path('api/v1/me/learning/', education.LearningDashboardView.as_view()),
+    path('api/v1/me/readiness/', education.ReadinessDashboardView.as_view()),
     path('api/v1/admin/analytics/', AdminLearningAnalyticsView.as_view()),
     path('api/v1/admin/users/', admin_accounts.AdminUserList.as_view()),
     path('api/v1/admin/users/<int:pk>/', admin_accounts.AdminUserDetail.as_view()),

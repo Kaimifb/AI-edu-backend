@@ -201,6 +201,60 @@ class LearningDashboardView(generics.GenericAPIView):
         return Response(learning_dashboard(request.user, accessible_courses(request.user)))
 
 
+class ReadinessHistoryOutput(serializers.Serializer):
+    completed_at = serializers.DateTimeField()
+    readiness = serializers.FloatField()
+    passed = serializers.BooleanField()
+
+
+class ReadinessModuleOutput(serializers.Serializer):
+    id = serializers.IntegerField()
+    short_id = serializers.CharField()
+    title = serializers.CharField()
+    status = serializers.ChoiceField(choices=['locked', 'available', 'repeat', 'completed'])
+    threshold = serializers.IntegerField()
+    attempts = serializers.IntegerField()
+    readiness = serializers.FloatField(allow_null=True)
+    best_readiness = serializers.FloatField(allow_null=True)
+    history = ReadinessHistoryOutput(many=True)
+    recommendation = serializers.DictField(allow_null=True)
+
+
+class ReadinessCompetencyOutput(serializers.Serializer):
+    competency = serializers.CharField()
+    title = serializers.CharField()
+    score = serializers.FloatField()
+    is_weak = serializers.BooleanField()
+
+
+class ReadinessCourseOutput(serializers.Serializer):
+    id = serializers.IntegerField()
+    short_id = serializers.CharField()
+    slug = serializers.CharField()
+    title = serializers.CharField()
+    passed_modules = serializers.IntegerField()
+    total_modules = serializers.IntegerField()
+    average_readiness = serializers.FloatField(allow_null=True)
+    modules = ReadinessModuleOutput(many=True)
+    competencies = ReadinessCompetencyOutput(many=True)
+    weak_topic_limit = serializers.FloatField()
+
+
+class ReadinessDashboardOutput(serializers.Serializer):
+    courses = ReadinessCourseOutput(many=True)
+
+
+class ReadinessDashboardView(generics.GenericAPIView):
+    """The student's own readiness per module, attempt history and competency profile (adaptive courses only)."""
+    serializer_class = ReadinessDashboardOutput
+
+    def get(self, request):
+        if request.user.role != 'STUDENT':
+            raise PermissionDenied()
+        from .readiness import my_readiness
+        return Response(my_readiness(request.user, accessible_courses(request.user)))
+
+
 class CourseProgressView(generics.GenericAPIView):
     serializer_class = CourseProgressOutput
     def get(self, request, slug):
