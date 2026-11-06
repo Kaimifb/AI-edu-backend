@@ -138,5 +138,6 @@ def evaluate_module_attempt(user, item, question_results, practice):
         'next_item_short_id': next_item.short_id if next_item else None,
     }
     from .recommendations import build_recommendation
-    result['recommendation'] = build_recommendation(result, question_results)
+    review_items = module.items.filter(status='PUBLISHED', type__in=['LECTURE', 'PRACTICE'])
+    result['recommendation'] = build_recommendation(result, question_results, review_items)
     return result

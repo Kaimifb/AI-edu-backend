@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase, TestCase
 
 from apps.assessments.models import TestAttempt
-from .recommendations import build_recommendation, recommendation_level, weak_topics
+from .recommendations import build_recommendation, recommendation_level, review_plan, weak_topics
 from . import test_adaptive
 
 
@@ -47,6 +47,29 @@ class RecommendationRulesTests(SimpleTestCase):
         self.assertEqual((topics[2]['correct'], topics[2]['total']), (1, 2))
 
 
+def item(short_id, title, type='LECTURE', position=0, competencies=()):
+    return SimpleNamespace(pk=position + 1, short_id=short_id, title=title, type=type, position=position, competencies=list(competencies))
+
+
+class ReviewPlanTests(SimpleTestCase):
+    topics = [{'competency': 'корреляция', 'title': 'Корреляция'}, {'competency': 'pandas', 'title': 'Pandas'}]
+
+    def test_tags_win_over_titles_and_lectures_come_first(self):
+        items = [item('pr', 'Практика: корреляция', 'PRACTICE', 0, ['Корреляция']),
+                 item('l2', 'Лекция 2', 'LECTURE', 2, [' корреляция ']),
+                 item('l1', 'Лекция 1. Корреляция Пирсона', 'LECTURE', 1),
+                 item('l3', 'Лекция 3. Pandas', 'LECTURE', 3)]
+        plan = review_plan(self.topics, items)
+        self.assertEqual([(row['short_id'], row['match']) for row in plan[0]['items']], [('l2', 'tag'), ('pr', 'tag')])
+        self.assertEqual([(row['short_id'], row['match']) for row in plan[1]['items']], [('l3', 'title')])
+
+    def test_unmatched_topic_has_no_items_and_list_is_capped(self):
+        many = [item(f'l{index}', 'Корреляция', position=index) for index in range(5)]
+        plan = review_plan(self.topics, many)
+        self.assertEqual(len(plan[0]['items']), 3)
+        self.assertEqual(plan[1]['items'], [])
+
+
 class RecommendationFlowTests(TestCase):
     setUp = test_adaptive.AdaptiveLearningTests.setUp
     make_lecture = test_adaptive.AdaptiveLearningTests.make_lecture
@@ -59,7 +82,23 @@ class RecommendationFlowTests(TestCase):
         self.assertEqual(recommendation['status'], 'repeat')
         self.assertEqual(recommendation['action'], 'repeat_module')
         self.assertEqual([row['title'] for row in recommendation['weak_topics']], ['application'])
+        self.assertEqual(recommendation['review'], [{'competency': 'application', 'title': 'application', 'items': []}])
         self.assertEqual(TestAttempt.objects.get().adaptive_result['recommendation'], recommendation)
+
+    def test_tagged_lecture_is_recommended_for_its_weak_topic(self):
+        self.lecture.competencies = ['Application']
+        self.lecture.save(update_fields=['competencies'])
+        self.prepare()
+        review = self.submit(2)['adaptive_result']['recommendation']['review']
+        self.assertEqual(review[0]['items'], [{'short_id': self.lecture.short_id, 'title': 'Lecture', 'type': 'LECTURE', 'match': 'tag'}])
+
+    def test_admin_tags_an_item_and_bad_tags_are_refused(self):
+        url = f'/api/v1/items/{self.lecture.short_id}/'
+        response = self.admin_client.patch(url, {'competencies': [' Pandas ', 'pandas', 'Корреляция']}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['competencies'], ['Pandas', 'Корреляция'])
+        for bad in (['x' * 101], [''], 'Pandas', [1], [str(n) for n in range(11)]):
+            self.assertEqual(self.admin_client.patch(url, {'competencies': bad}, format='json').status_code, 400, bad)
 
     def test_passed_attempt_recommends_the_next_module(self):
         self.prepare()

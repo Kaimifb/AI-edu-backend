@@ -9,6 +9,8 @@ WEAK_TOPIC_LIMIT = 0.6
 # whatever threshold an administrator picks and if the readiness scale is normalised later.
 LEVEL_MARGIN = 15
 INDICATORS = ('theory', 'practice', 'competency')
+REVIEW_ITEMS_PER_TOPIC = 3
+TYPE_ORDER = {'LECTURE': 0, 'PRACTICE': 1}
 
 
 def recommendation_level(gap):
@@ -38,7 +40,25 @@ def weak_topics(question_results, limit=WEAK_TOPIC_LIMIT):
     return sorted(topics, key=lambda row: (row['score'], row['title'].casefold()))
 
 
-def build_recommendation(result, question_results):
+def review_plan(topics, items):
+    """Materials of the module to review for each weak topic.
+
+    An item matches a topic when the author tagged it with that competency; otherwise when the
+    topic name appears in its title. Lectures come before practicals, then module order.
+    """
+    plan = []
+    ordered = sorted(items, key=lambda item: (TYPE_ORDER.get(item.type, 9), item.position, item.pk))
+    for topic in topics:
+        key = topic['competency']
+        tagged = [item for item in ordered if key in {tag.strip().casefold() for tag in (item.competencies or [])}]
+        matched = tagged or [item for item in ordered if key in item.title.casefold()]
+        plan.append({'competency': key, 'title': topic['title'], 'items': [
+            {'short_id': item.short_id, 'title': item.title, 'type': item.type, 'match': 'tag' if tagged else 'title'}
+            for item in matched[:REVIEW_ITEMS_PER_TOPIC]]})
+    return plan
+
+
+def build_recommendation(result, question_results, review_items=()):
     passed = bool(result['module_passed'])
     gap = round(result['readiness'] - result['threshold'], 2)
     if passed:
@@ -46,12 +66,14 @@ def build_recommendation(result, question_results):
     else:
         action = 'repeat_module'
     weakest = min(INDICATORS, key=lambda name: (result[name], INDICATORS.index(name)))
+    topics = weak_topics(question_results)
     return {
         'status': 'passed' if passed else 'repeat',
         'action': action,
         'level': recommendation_level(gap),
         'gap': gap,
         'weakest_indicator': weakest,
-        'weak_topics': weak_topics(question_results),
+        'weak_topics': topics,
         'weak_topic_limit': WEAK_TOPIC_LIMIT,
+        'review': review_plan(topics, review_items),
     }

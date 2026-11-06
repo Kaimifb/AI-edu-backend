@@ -126,6 +126,8 @@ class LearningItem(ShortIdModel):
     lesson = models.OneToOneField(Lesson, null=True, blank=True, on_delete=PROTECT, related_name='learning_item')
     test = models.OneToOneField('assessments.Test', null=True, blank=True, on_delete=PROTECT, related_name='learning_item')
     practice = models.OneToOneField('activities.PracticeDefinition', null=True, blank=True, on_delete=PROTECT, related_name='learning_item')
+    # Topics (test competencies) this lecture or practice teaches; used to point a learner at what to review.
+    competencies = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
