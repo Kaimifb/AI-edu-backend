@@ -77,3 +77,18 @@ def build_recommendation(result, question_results, review_items=()):
         'weak_topic_limit': WEAK_TOPIC_LIMIT,
         'review': review_plan(topics, review_items),
     }
+
+
+def review_route(recommendation, content):
+    """What a learner studies again before the next attempt.
+
+    Close to the threshold (level `extra_practice`) only the materials recommended for the weak
+    topics are reopened, in module order. Far below it, or when no material matches a weak topic,
+    the whole module is studied again.
+    """
+    if recommendation['level'] == 'extra_practice':
+        wanted = {entry['short_id'] for topic in recommendation['review'] for entry in topic['items']}
+        items = [item for item in content if item.short_id in wanted]
+        if items:
+            return {'scope': 'topics', 'items': items}
+    return {'scope': 'module', 'items': []}

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase, TestCase
 
 from apps.assessments.models import TestAttempt
+from .models import PracticeSubmission, UserLearningItemProgress
 from .recommendations import build_recommendation, recommendation_level, review_plan, weak_topics
 from . import test_adaptive
 
@@ -91,6 +92,36 @@ class RecommendationFlowTests(TestCase):
         self.prepare()
         review = self.submit(2)['adaptive_result']['recommendation']['review']
         self.assertEqual(review[0]['items'], [{'short_id': self.lecture.short_id, 'title': 'Lecture', 'type': 'LECTURE', 'match': 'tag'}])
+
+    def test_close_to_threshold_only_weak_topic_materials_are_reopened(self):
+        self.lecture.competencies = ['Application']
+        self.lecture.save(update_fields=['competencies'])
+        self.first.adaptive_threshold = 70
+        self.first.save(update_fields=['adaptive_threshold'])
+        self.prepare()
+        result = self.submit(3)['adaptive_result']
+        recommendation = result['recommendation']
+        self.assertEqual(recommendation['level'], 'extra_practice')
+        self.assertEqual(recommendation['route'], {'scope': 'topics', 'items': [
+            {'short_id': self.lecture.short_id, 'title': 'Lecture', 'type': 'LECTURE'}]})
+        self.assertEqual(result['repeat_item_short_id'], self.lecture.short_id)
+        self.assertFalse(UserLearningItemProgress.objects.get(user=self.student, learning_item=self.lecture).is_completed)
+        # The practical of a topic the learner knows stays done, so only the lecture is studied again.
+        self.assertTrue(PracticeSubmission.objects.filter(user=self.student, item=self.practice, is_current=True).exists())
+        self.assertEqual(self.client.patch(f'/api/v1/items/{self.lecture.short_id}/progress/',
+            {'progress_percent': 95}, format='json').status_code, 200)
+        self.assertTrue(self.submit()['adaptive_result']['module_passed'])
+
+    def test_far_below_threshold_the_whole_module_is_reopened(self):
+        self.lecture.competencies = ['Application']
+        self.lecture.save(update_fields=['competencies'])
+        self.prepare()
+        recommendation = self.submit(2)['adaptive_result']['recommendation']
+        self.assertEqual(recommendation['level'], 'repeat')
+        self.assertEqual(recommendation['route']['scope'], 'module')
+        self.assertEqual([row['short_id'] for row in recommendation['route']['items']],
+                         [self.lecture.short_id, self.practice.short_id])
+        self.assertFalse(PracticeSubmission.objects.filter(user=self.student, item=self.practice, is_current=True).exists())
 
     def test_admin_tags_an_item_and_bad_tags_are_refused(self):
         url = f'/api/v1/items/{self.lecture.short_id}/'
